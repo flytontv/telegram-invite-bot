@@ -110,7 +110,7 @@ async def create_secure_invite(bot, chat_id, is_req, expire_ts, max_retries=3):
             break
     return None
 
-# --- USER GATEWAY: NO EXTRA BUTTONS & COPY PROTECTED ---
+# --- USER GATEWAY: STRICT 59s AUTO-DELETE & ZERO BUTTONS ON DIRECT /START ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user or update.effective_chat.type != "private":
         return
@@ -150,7 +150,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             sent_ids = [update.message.message_id]
             custom_img = get_setting("custom_image", "")
 
-            # Screenshot line 1
             header_text = "<b>ʜᴇʀᴇ ɪs ʏᴏᴜʀ ʟɪɴᴋ! ᴄʟɪᴄᴋ ʙᴇʟᴏᴡ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ</b>"
             if custom_img:
                 try:
@@ -179,25 +178,29 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 sent_ids.append(m1.message_id)
 
-            # Screenshot line 2 (Underlined Note)
-            note_text = "<u><b>ɴᴏᴛᴇ:</b> ɪғ ᴛʜᴇ ʟɪɴᴋ ɪs ᴇxᴘɪʀᴇᴅ, ᴘʟᴇᴀsᴇ ᴄʟɪᴄᴋ ᴛʜᴇ ᴘᴏsᴛ ʟɪɴᴋ ᴀɢᴀɪɴ ᴛᴏ ɢᴇᴛ ᴀ ɴᴇᴡ ᴏɴᴇ.</u>"
+            note_text = (
+                "<u><b>ɴᴏᴛᴇ:</b> ɪғ ᴛʜᴇ ʟɪɴᴋ ɪs ᴇxᴘɪʀᴇᴅ, ᴘʟᴇᴀsᴇ ᴄʟɪᴄᴋ ᴛʜᴇ ᴘᴏsᴛ ʟɪɴᴋ ᴀɢᴀɪɴ ᴛᴏ ɢᴇᴛ ᴀ ɴᴇᴡ ᴏɴᴇ.</u>\n\n"
+                "⏳ <i>ᴛʜɪs ᴍᴇssᴀɢᴇ ᴡɪʟʟ ᴀᴜᴛᴏ-ᴅᴇʟᴇᴛᴇ ɪɴ 59 sᴇᴄᴏɴᴅs...</i>"
+            )
             m2 = await update.message.reply_text(note_text, parse_mode="HTML", protect_content=True)
             sent_ids.append(m2.message_id)
 
-            # 59s Auto-delete
+            # Exactly 59 Seconds Auto-delete for all deep-link messages
             context.job_queue.run_once(delete_job, 59, data={"chat_id": chat_id, "msg_ids": sent_ids})
             return
 
-    # Direct /start without payload (No extra buttons)
+    # Direct /start without payload (Zero Buttons, Copy-Protected, Auto-deletes in 59s)
     default_text = (
         "<b>ɪ ᴀᴍ ᴀ sᴇᴄᴜʀᴇ ʟɪɴᴋ ᴄʜᴀɴɢᴇʀ ʙᴏᴛ. ʏᴏᴜ ᴄᴀɴ ᴜsᴇ ᴍᴇ ᴛᴏ ɢᴇᴛ ᴀᴄᴄᴇss ᴛᴏ ᴄʜᴀɴɴᴇʟs sᴀғᴇʟʏ!</b>\n\n"
         "<b>ɪᴛ's ᴇᴀsʏ ᴛᴏ ᴜsᴇ ᴍᴇ:</b>\n"
         "1. ᴄʟɪᴄᴋ ᴏɴ ᴀɴʏ ᴘᴏsᴛ ʟɪɴᴋ\n"
         "2. ɢᴇᴛ ʏᴏᴜʀ 59-sᴇᴄᴏɴᴅ sᴇᴄᴜʀᴇ ʟɪɴᴋ\n"
-        "3. ᴘʀᴏᴄᴇᴇᴅ ᴛᴏ ᴊᴏɪɴ ᴛʜᴇ ᴄʜᴀɴɴᴇʟ ᴇᴀsɪʟʏ!"
+        "3. ᴘʀᴏᴄᴇᴇᴅ ᴛᴏ ᴊᴏɪɴ ᴛʜᴇ ᴄʜᴀɴɴᴇʟ ᴇᴀsɪʟʏ!\n\n"
+        "⏳ <i>ᴛʜɪs ᴍᴇssᴀɢᴇ ᴡɪʟʟ ᴀᴜᴛᴏ-ᴅᴇʟᴇᴛᴇ ɪɴ 59 sᴇᴄᴏɴᴅs...</i>"
     )
     s_msg = await update.message.reply_text(default_text, parse_mode="HTML", protect_content=True)
-    context.job_queue.run_once(delete_job, 30, data={"chat_id": chat_id, "msg_ids": [s_msg.message_id, update.message.message_id]})
+    # Exactly 59 Seconds Auto-delete for user start command + bot reply
+    context.job_queue.run_once(delete_job, 59, data={"chat_id": chat_id, "msg_ids": [s_msg.message_id, update.message.message_id]})
 
 # --- BUTTON HANDLER ---
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
