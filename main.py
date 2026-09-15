@@ -23,7 +23,6 @@ PORT = int(os.environ.get("PORT", 8080))
 
 DB_FILE = "bot_data.db"
 
-# --- DATABASE OPTIMIZED FOR CONCURRENCY ---
 def get_db():
     conn = sqlite3.connect(DB_FILE, timeout=60.0, check_same_thread=False)
     conn.execute("PRAGMA journal_mode=WAL;")
@@ -69,7 +68,6 @@ def set_setting(key: str, value: str):
         c.execute("INSERT OR REPLACE INTO settings VALUES (?, ?)", (key, str(value)))
         conn.commit()
 
-# --- KEEP-ALIVE SERVER ---
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -82,7 +80,6 @@ def run_web_server():
     server = HTTPServer(("0.0.0.0", PORT), HealthHandler)
     server.serve_forever()
 
-# --- ASYNC SAFE MESSAGE DELETER ---
 async def delete_job(context: ContextTypes.DEFAULT_TYPE):
     job_data = context.job.data
     chat_id = job_data["chat_id"]
@@ -93,7 +90,6 @@ async def delete_job(context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
 
-# --- LINK CREATOR WITH RETRY SAFEGUARD ---
 async def create_secure_invite(bot, chat_id, is_req, expire_ts, max_retries=3):
     for attempt in range(max_retries):
         try:
@@ -113,14 +109,13 @@ async def create_secure_invite(bot, chat_id, is_req, expire_ts, max_retries=3):
             break
     return None
 
-# --- START & DEEP LINK HANDLER ---
+# --- USER START ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user or update.effective_chat.type != "private":
         return
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
 
-    # Background fast user logging
     try:
         with get_db() as conn:
             conn.execute("INSERT OR IGNORE INTO users VALUES (?)", (user_id,))
@@ -128,6 +123,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         pass
 
+    # Link Generation (/start req_xxx ya /start join_xxx)
     if context.args and len(context.args) > 0:
         arg = context.args[0]
         is_req = arg.startswith("req_")
@@ -140,59 +136,69 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             invite = await create_secure_invite(context.bot, target_ch, is_req, expire_ts)
             if not invite:
-                err = await update.message.reply_text("Server busy, please click the link again.")
+                err = await update.message.reply_text("SERVER BUSY. PLEASE CLICK THE LINK AGAIN.")
                 context.job_queue.run_once(delete_job, 10, data={"chat_id": chat_id, "msg_ids": [err.message_id]})
                 return
 
-            btn_text = "• REQUEST TO JOIN •" if is_req else "• JOIN CHANNEL •"
-            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton(btn_text, url=invite.invite_link)]])
+            btn_label = "REQUEST TO JOIN CHANNEL" if is_req else "JOIN CHANNEL NOW"
+            keyboard = [[InlineKeyboardButton(f"• {btn_label} •", url=invite.invite_link)]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
+            caption_text = (
+                "YOUR SECURE ACCESS LINK IS READY!\n\n"
+                "HOW TO JOIN:\n"
+                "1. CLICK THE BUTTON BELOW\n"
+                "2. SEND JOIN REQUEST\n"
+                "3. GET INSTANT ACCESS TO THE CHANNEL!\n\n"
+                "NOTE: THIS LINK EXPIRES AUTOMATICALLY IN 59 SECONDS."
+            )
 
             custom_img = get_setting("custom_image", "")
             sent_ids = [update.message.message_id]
 
             if custom_img:
                 try:
-                    m1 = await update.message.reply_photo(
+                    m = await update.message.reply_photo(
                         photo=custom_img,
-                        caption="<b>HERE IS YOUR LINK! CLICK BELOW TO PROCEED</b>\n<i>Valid for 59 Seconds!</i>",
-                        reply_markup=reply_markup,
-                        parse_mode="HTML"
+                        caption=caption_text,
+                        reply_markup=reply_markup
                     )
-                    sent_ids.append(m1.message_id)
+                    sent_ids.append(m.message_id)
                 except Exception:
-                    m1 = await update.message.reply_text(
-                        "<b>HERE IS YOUR LINK! CLICK BELOW TO PROCEED</b>",
-                        reply_markup=reply_markup,
-                        parse_mode="HTML"
+                    m = await update.message.reply_text(
+                        caption_text,
+                        reply_markup=reply_markup
                     )
-                    sent_ids.append(m1.message_id)
+                    sent_ids.append(m.message_id)
             else:
-                m1 = await update.message.reply_text(
-                    "<b>HERE IS YOUR LINK! CLICK BELOW TO PROCEED</b>",
-                    reply_markup=reply_markup,
-                    parse_mode="HTML"
+                m = await update.message.reply_text(
+                    caption_text,
+                    reply_markup=reply_markup
                 )
-                sent_ids.append(m1.message_id)
+                sent_ids.append(m.message_id)
 
-            m2 = await update.message.reply_text(
-                "<u><b>Note:</b> If the link is expired, please click the post link again to get a new one.</u>",
-                parse_mode="HTML"
-            )
-            sent_ids.append(m2.message_id)
-
-            # High-traffic safe timer (JobQueue uses negligible RAM)
+            # Auto-delete in 59 seconds
             context.job_queue.run_once(delete_job, 59, data={"chat_id": chat_id, "msg_ids": sent_ids})
             return
 
-    s_msg = await update.message.reply_text("✅ <b>Bot is active and running!</b>", parse_mode="HTML")
-    context.job_queue.run_once(delete_job, 15, data={"chat_id": chat_id, "msg_ids": [s_msg.message_id, update.message.message_id]})
+    # Default Start Message (Screen-shot Style)
+    default_text = (
+        "I AM A SECURE LINK CHANGER BOT. YOU CAN USE ME TO GET ACCESS TO CHANNELS SAFELY!\n\n"
+        "IT'S EASY TO USE ME:\n"
+        "1. CLICK ON ANY POST LINK\n"
+        "2. GET YOUR 59-SECOND SECURE LINK\n"
+        "3. PROCEED TO JOIN THE CHANNEL EASILY!"
+    )
+    btn = [[InlineKeyboardButton("FlyTon Anime Channel", url="https://t.me/FlyTonTV")]]
+    s_msg = await update.message.reply_text(default_text, reply_markup=InlineKeyboardMarkup(btn))
+    context.job_queue.run_once(delete_job, 30, data={"chat_id": chat_id, "msg_ids": [s_msg.message_id, update.message.message_id]})
 
 # --- ADMIN COMMANDS ---
 async def addch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
         return
     if not context.args:
-        await update.message.reply_text("Usage: `/addch -100xxxxxxxxxx`", parse_mode="Markdown")
+        await update.message.reply_text("USAGE: /addch -100xxxxxxxxxx")
         return
     try:
         ch_id = int(context.args[0])
@@ -204,17 +210,24 @@ async def addch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bot_user = (await context.bot.get_me()).username
         clean_id = str(ch_id).replace("-100", "")
 
-        text = (
-            f"✅ <b>Channel Protected & Added!</b>\n\n"
-            f"📢 <b>Title:</b> {chat.title}\n"
-            f"🆔 <b>ID:</b> <code>{ch_id}</code>\n\n"
-            f"🔗 <b>High-Traffic Infinite Links:</b>\n"
-            f"1️⃣ <b>Request to Join:</b>\n<code>https://t.me/{bot_user}?start=req_{clean_id}</code>\n\n"
-            f"2️⃣ <b>Direct Join:</b>\n<code>https://t.me/{bot_user}?start=join_{clean_id}</code>"
+        req_url = f"https://t.me/{bot_user}?start=req_{clean_id}"
+        join_url = f"https://t.me/{bot_user}?start=join_{clean_id}"
+
+        response_text = (
+            f"CHANNEL ADDED SUCCESSFULLY!\n\n"
+            f"CHANNEL: {chat.title}\n"
+            f"CHANNEL ID: {ch_id}\n\n"
+            f"INFINITE POST LINKS:\n\n"
+            f"1. REQUEST TO JOIN LINK:\n{req_url}\n\n"
+            f"2. DIRECT JOIN LINK:\n{join_url}"
         )
-        await update.message.reply_text(text, parse_mode="HTML")
+        keyboard = [
+            [InlineKeyboardButton("TEST REQUEST LINK", url=req_url)],
+            [InlineKeyboardButton("TEST JOIN LINK", url=join_url)]
+        ]
+        await update.message.reply_text(response_text, reply_markup=InlineKeyboardMarkup(keyboard))
     except Exception as e:
-        await update.message.reply_text(f"Error: {e}\n(Make sure bot is admin in the channel)")
+        await update.message.reply_text(f"ERROR: {e}\nMAKE SURE BOT IS ADMIN IN THE CHANNEL!")
 
 async def delch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
@@ -225,7 +238,7 @@ async def delch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     with get_db() as conn:
         conn.execute("DELETE FROM channels WHERE channel_id = ?", (ch_id,))
         conn.commit()
-    await update.message.reply_text(f"Channel `{ch_id}` removed.", parse_mode="Markdown")
+    await update.message.reply_text(f"CHANNEL {ch_id} REMOVED SUCCESSFULLY!")
 
 async def channels_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
@@ -235,14 +248,17 @@ async def channels_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         c.execute("SELECT channel_id, title FROM channels")
         rows = c.fetchall()
     if not rows:
-        await update.message.reply_text("No channels connected.")
+        await update.message.reply_text("NO CONNECTED CHANNELS FOUND.")
         return
     bot_user = (await context.bot.get_me()).username
-    msg = "📢 <b>Active Channels:</b>\n\n"
+    msg = "ALL CONNECTED CHANNELS:\n\n"
+    buttons = []
     for r in rows:
         clean_id = str(r[0]).replace("-100", "")
-        msg += f"• <b>{r[1]}</b>\n  <code>https://t.me/{bot_user}?start=req_{clean_id}</code>\n\n"
-    await update.message.reply_text(msg, parse_mode="HTML")
+        link = f"https://t.me/{bot_user}?start=req_{clean_id}"
+        msg += f"• {r[1]} ({r[0]})\n{link}\n\n"
+        buttons.append([InlineKeyboardButton(f"OPEN {r[1]}", url=link)])
+    await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(buttons))
 
 async def setpic(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
@@ -250,15 +266,15 @@ async def setpic(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.reply_to_message and update.message.reply_to_message.photo:
         fid = update.message.reply_to_message.photo[-1].file_id
         set_setting("custom_image", fid)
-        await update.message.reply_text("✅ Branding image updated!")
+        await update.message.reply_text("CUSTOM HEADER IMAGE HAS BEEN UPDATED!")
     else:
-        await update.message.reply_text("Reply to an image with `/setpic`")
+        await update.message.reply_text("REPLY TO ANY IMAGE WITH /setpic")
 
 async def unsetpic(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
         return
     set_setting("custom_image", "")
-    await update.message.reply_text("Custom image removed.")
+    await update.message.reply_text("CUSTOM IMAGE REMOVED.")
 
 async def approveon(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
@@ -269,7 +285,7 @@ async def approveon(update: Update, context: ContextTypes.DEFAULT_TYPE):
     with get_db() as conn:
         conn.execute("UPDATE channels SET auto_approve = 1 WHERE channel_id = ?", (ch_id,))
         conn.commit()
-    await update.message.reply_text(f"Auto-approval ENABLED for `{ch_id}`")
+    await update.message.reply_text(f"AUTO-APPROVAL ENABLED FOR {ch_id}")
 
 async def approveoff(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
@@ -280,7 +296,7 @@ async def approveoff(update: Update, context: ContextTypes.DEFAULT_TYPE):
     with get_db() as conn:
         conn.execute("UPDATE channels SET auto_approve = 0 WHERE channel_id = ?", (ch_id,))
         conn.commit()
-    await update.message.reply_text(f"Auto-approval DISABLED for `{ch_id}`")
+    await update.message.reply_text(f"AUTO-APPROVAL DISABLED FOR {ch_id}")
 
 async def reqmode(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
@@ -288,7 +304,7 @@ async def reqmode(update: Update, context: ContextTypes.DEFAULT_TYPE):
     curr = get_setting("reqmode", "on")
     nxt = "off" if curr == "on" else "on"
     set_setting("reqmode", nxt)
-    await update.message.reply_text(f"Global Auto-Approval: <b>{nxt.upper()}</b>", parse_mode="HTML")
+    await update.message.reply_text(f"GLOBAL AUTO-APPROVAL IS NOW: {nxt.upper()}")
 
 async def reqtime(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
@@ -297,7 +313,7 @@ async def reqtime(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     sec = int(context.args[0])
     set_setting("reqtime", str(sec))
-    await update.message.reply_text(f"Approval delay set to <b>{sec}s</b>.", parse_mode="HTML")
+    await update.message.reply_text(f"AUTO-APPROVAL TIMER SET TO: {sec} SECONDS")
 
 async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     req = update.chat_join_request
@@ -331,19 +347,17 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         c.execute("SELECT COUNT(*) FROM users")
         u_count = c.fetchone()[0]
 
-    img = "SET ✅" if get_setting("custom_image") else "NOT SET ❌"
+    img = "SET" if get_setting("custom_image") else "NOT SET"
     text = (
-        "🚀 <b>High-Load Engine Status:</b>\n\n"
-        "• Concurrency: <b>Enabled (JobQueue + Async Pool)</b>\n"
-        f"• Connected Channels: <b>{ch_count}</b>\n"
-        f"• Total Users Tracked: <b>{u_count}</b>\n"
-        f"• Branding Image: <b>{img}</b>\n"
-        f"• Auto-Approval: <b>{get_setting('reqmode', 'on').upper()}</b>\n"
-        f"• Approval Delay: <b>{get_setting('reqtime', '0')}s</b>"
+        "SYSTEM STATUS OVERVIEW:\n\n"
+        f"CONNECTED CHANNELS: {ch_count}\n"
+        f"TOTAL USERS: {u_count}\n"
+        f"CUSTOM BRANDING: {img}\n"
+        f"AUTO-APPROVAL MODE: {get_setting('reqmode', 'on').upper()}\n"
+        f"APPROVAL DELAY: {get_setting('reqtime', '0')} SECONDS"
     )
-    await update.message.reply_text(text, parse_mode="HTML")
+    await update.message.reply_text(text)
 
-# --- APP INITIALIZATION ---
 if __name__ == "__main__":
     threading.Thread(target=run_web_server, daemon=True).start()
 
