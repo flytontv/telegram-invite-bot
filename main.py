@@ -110,7 +110,7 @@ async def create_secure_invite(bot, chat_id, is_req, expire_ts, max_retries=3):
             break
     return None
 
-# --- USER GATEWAY: NO BOX, SCREENSHOT EXACT MATCH WITH SMALL CAPS ---
+# --- USER GATEWAY: NO EXTRA BUTTONS & COPY PROTECTED ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user or update.effective_chat.type != "private":
         return
@@ -137,8 +137,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             invite = await create_secure_invite(context.bot, target_ch, is_req, expire_ts)
             if not invite:
-                err = await update.message.reply_text("sᴇʀᴠᴇʀ ʙᴜsʏ. ᴘʟᴇᴀsᴇ ᴄʟɪᴄᴋ ᴛʜᴇ ʟɪɴᴋ ᴀɢᴀɪɴ.")
-                context.job_queue.run_once(delete_job, 10, data={"chat_id": chat_id, "msg_ids": [err.message_id]})
+                err = await update.message.reply_text(
+                    "sᴇʀᴠᴇʀ ʙᴜsʏ. ᴘʟᴇᴀsᴇ ᴄʟɪᴄᴋ ᴛʜᴇ ʟɪɴᴋ ᴀɢᴀɪɴ.",
+                    protect_content=True
+                )
+                context.job_queue.run_once(delete_job, 10, data={"chat_id": chat_id, "msg_ids": [err.message_id, update.message.message_id]})
                 return
 
             btn_label = "• ʀᴇǫᴜᴇsᴛ ᴛᴏ ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ •" if is_req else "• ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ •"
@@ -155,26 +158,37 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         photo=custom_img,
                         caption=header_text,
                         reply_markup=reply_markup,
-                        parse_mode="HTML"
+                        parse_mode="HTML",
+                        protect_content=True
                     )
                     sent_ids.append(m1.message_id)
                 except Exception:
-                    m1 = await update.message.reply_text(header_text, reply_markup=reply_markup, parse_mode="HTML")
+                    m1 = await update.message.reply_text(
+                        header_text,
+                        reply_markup=reply_markup,
+                        parse_mode="HTML",
+                        protect_content=True
+                    )
                     sent_ids.append(m1.message_id)
             else:
-                m1 = await update.message.reply_text(header_text, reply_markup=reply_markup, parse_mode="HTML")
+                m1 = await update.message.reply_text(
+                    header_text,
+                    reply_markup=reply_markup,
+                    parse_mode="HTML",
+                    protect_content=True
+                )
                 sent_ids.append(m1.message_id)
 
             # Screenshot line 2 (Underlined Note)
             note_text = "<u><b>ɴᴏᴛᴇ:</b> ɪғ ᴛʜᴇ ʟɪɴᴋ ɪs ᴇxᴘɪʀᴇᴅ, ᴘʟᴇᴀsᴇ ᴄʟɪᴄᴋ ᴛʜᴇ ᴘᴏsᴛ ʟɪɴᴋ ᴀɢᴀɪɴ ᴛᴏ ɢᴇᴛ ᴀ ɴᴇᴡ ᴏɴᴇ.</u>"
-            m2 = await update.message.reply_text(note_text, parse_mode="HTML")
+            m2 = await update.message.reply_text(note_text, parse_mode="HTML", protect_content=True)
             sent_ids.append(m2.message_id)
 
             # 59s Auto-delete
             context.job_queue.run_once(delete_job, 59, data={"chat_id": chat_id, "msg_ids": sent_ids})
             return
 
-    # Direct /start without payload
+    # Direct /start without payload (No extra buttons)
     default_text = (
         "<b>ɪ ᴀᴍ ᴀ sᴇᴄᴜʀᴇ ʟɪɴᴋ ᴄʜᴀɴɢᴇʀ ʙᴏᴛ. ʏᴏᴜ ᴄᴀɴ ᴜsᴇ ᴍᴇ ᴛᴏ ɢᴇᴛ ᴀᴄᴄᴇss ᴛᴏ ᴄʜᴀɴɴᴇʟs sᴀғᴇʟʏ!</b>\n\n"
         "<b>ɪᴛ's ᴇᴀsʏ ᴛᴏ ᴜsᴇ ᴍᴇ:</b>\n"
@@ -182,11 +196,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "2. ɢᴇᴛ ʏᴏᴜʀ 59-sᴇᴄᴏɴᴅ sᴇᴄᴜʀᴇ ʟɪɴᴋ\n"
         "3. ᴘʀᴏᴄᴇᴇᴅ ᴛᴏ ᴊᴏɪɴ ᴛʜᴇ ᴄʜᴀɴɴᴇʟ ᴇᴀsɪʟʏ!"
     )
-    buttons = [
-        [InlineKeyboardButton("• ᴜᴘᴅᴀᴛᴇs ᴄʜᴀɴɴᴇʟ •", url="https://t.me/FlyTonTV")],
-        [InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="close_msg")]
-    ]
-    s_msg = await update.message.reply_text(default_text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="HTML")
+    s_msg = await update.message.reply_text(default_text, parse_mode="HTML", protect_content=True)
     context.job_queue.run_once(delete_job, 30, data={"chat_id": chat_id, "msg_ids": [s_msg.message_id, update.message.message_id]})
 
 # --- BUTTON HANDLER ---
