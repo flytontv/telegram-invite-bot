@@ -110,7 +110,7 @@ async def create_secure_invite(bot, chat_id, is_req, expire_ts, max_retries=3):
             break
     return None
 
-# --- USER START (CLEAN & NO-BOX STYLE) ---
+# --- USER GATEWAY: NO BOX, SCREENSHOT EXACT MATCH WITH SMALL CAPS ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user or update.effective_chat.type != "private":
         return
@@ -124,7 +124,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         pass
 
-    # Post Link Deep-Routing (/start req_xxx / /start join_xxx)
+    # Deep Link Handler (/start req_xxx / /start join_xxx)
     if context.args and len(context.args) > 0:
         arg = context.args[0]
         is_req = arg.startswith("req_")
@@ -141,66 +141,55 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 context.job_queue.run_once(delete_job, 10, data={"chat_id": chat_id, "msg_ids": [err.message_id]})
                 return
 
-            btn_label = "• ʀᴇǫᴜᴇsᴛ ᴛᴏ ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ •" if is_req else "• ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ ɴᴏᴡ •"
-            keyboard = [
-                [InlineKeyboardButton(btn_label, url=invite.invite_link)],
-                [InlineKeyboardButton("ᴄʟᴏsᴇ ɴᴏᴡ", callback_data="close_msg")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
+            btn_label = "• ʀᴇǫᴜᴇsᴛ ᴛᴏ ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ •" if is_req else "• ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ •"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton(btn_label, url=invite.invite_link)]])
 
-            caption_text = (
-                "ʏᴏᴜʀ sᴇᴄᴜʀᴇ ᴀᴄᴄᴇss ʟɪɴᴋ ɪs ʀᴇᴀᴅʏ!\n\n"
-                "ʜᴏᴡ ᴛᴏ ᴊᴏɪɴ:\n"
-                "1. ᴄʟɪᴄᴋ ᴛʜᴇ ʙᴜᴛᴛᴏɴ ʙᴇʟᴏᴡ\n"
-                "2. sᴇɴᴅ ᴊᴏɪɴ ʀᴇǫᴜᴇsᴛ\n"
-                "3. ɢᴇᴛ ɪɴsᴛᴀɴᴛ ᴀᴄᴄᴇss ᴛᴏ ᴛʜᴇ ᴄʜᴀɴɴᴇʟ!\n\n"
-                "ɴᴏᴛᴇ: ᴛʜɪs ʟɪɴᴋ ᴇxᴘɪʀᴇs ᴀᴜᴛᴏᴍᴀᴛɪᴄᴀʟʟʏ ɪɴ 59 sᴇᴄᴏɴᴅs."
-            )
-
-            custom_img = get_setting("custom_image", "")
             sent_ids = [update.message.message_id]
+            custom_img = get_setting("custom_image", "")
 
+            # Screenshot line 1
+            header_text = "<b>ʜᴇʀᴇ ɪs ʏᴏᴜʀ ʟɪɴᴋ! ᴄʟɪᴄᴋ ʙᴇʟᴏᴡ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ</b>"
             if custom_img:
                 try:
-                    m = await update.message.reply_photo(
+                    m1 = await update.message.reply_photo(
                         photo=custom_img,
-                        caption=caption_text,
-                        reply_markup=reply_markup
+                        caption=header_text,
+                        reply_markup=reply_markup,
+                        parse_mode="HTML"
                     )
-                    sent_ids.append(m.message_id)
+                    sent_ids.append(m1.message_id)
                 except Exception:
-                    m = await update.message.reply_text(
-                        caption_text,
-                        reply_markup=reply_markup
-                    )
-                    sent_ids.append(m.message_id)
+                    m1 = await update.message.reply_text(header_text, reply_markup=reply_markup, parse_mode="HTML")
+                    sent_ids.append(m1.message_id)
             else:
-                m = await update.message.reply_text(
-                    caption_text,
-                    reply_markup=reply_markup
-                )
-                sent_ids.append(m.message_id)
+                m1 = await update.message.reply_text(header_text, reply_markup=reply_markup, parse_mode="HTML")
+                sent_ids.append(m1.message_id)
 
-            # Auto-delete message in 59 seconds
+            # Screenshot line 2 (Underlined Note)
+            note_text = "<u><b>ɴᴏᴛᴇ:</b> ɪғ ᴛʜᴇ ʟɪɴᴋ ɪs ᴇxᴘɪʀᴇᴅ, ᴘʟᴇᴀsᴇ ᴄʟɪᴄᴋ ᴛʜᴇ ᴘᴏsᴛ ʟɪɴᴋ ᴀɢᴀɪɴ ᴛᴏ ɢᴇᴛ ᴀ ɴᴇᴡ ᴏɴᴇ.</u>"
+            m2 = await update.message.reply_text(note_text, parse_mode="HTML")
+            sent_ids.append(m2.message_id)
+
+            # 59s Auto-delete
             context.job_queue.run_once(delete_job, 59, data={"chat_id": chat_id, "msg_ids": sent_ids})
             return
 
-    # Normal direct /start message
+    # Direct /start without payload
     default_text = (
-        "ɪ ᴀᴍ ᴀ sᴇᴄᴜʀᴇ ʟɪɴᴋ ᴄʜᴀɴɢᴇʀ ʙᴏᴛ. ʏᴏᴜ ᴄᴀɴ ᴜsᴇ ᴍᴇ ᴛᴏ ɢᴇᴛ ᴀᴄᴄᴇss ᴛᴏ ᴄʜᴀɴɴᴇʟs sᴀғᴇʟʏ!\n\n"
-        "ɪᴛ's ᴇᴀsʏ ᴛᴏ ᴜsᴇ ᴍᴇ:\n"
+        "<b>ɪ ᴀᴍ ᴀ sᴇᴄᴜʀᴇ ʟɪɴᴋ ᴄʜᴀɴɢᴇʀ ʙᴏᴛ. ʏᴏᴜ ᴄᴀɴ ᴜsᴇ ᴍᴇ ᴛᴏ ɢᴇᴛ ᴀᴄᴄᴇss ᴛᴏ ᴄʜᴀɴɴᴇʟs sᴀғᴇʟʏ!</b>\n\n"
+        "<b>ɪᴛ's ᴇᴀsʏ ᴛᴏ ᴜsᴇ ᴍᴇ:</b>\n"
         "1. ᴄʟɪᴄᴋ ᴏɴ ᴀɴʏ ᴘᴏsᴛ ʟɪɴᴋ\n"
         "2. ɢᴇᴛ ʏᴏᴜʀ 59-sᴇᴄᴏɴᴅ sᴇᴄᴜʀᴇ ʟɪɴᴋ\n"
         "3. ᴘʀᴏᴄᴇᴇᴅ ᴛᴏ ᴊᴏɪɴ ᴛʜᴇ ᴄʜᴀɴɴᴇʟ ᴇᴀsɪʟʏ!"
     )
     buttons = [
-        [InlineKeyboardButton("ᴜᴘᴅᴀᴛᴇs ᴄʜᴀɴɴᴇʟ", url="https://t.me/FlyTonTV")],
+        [InlineKeyboardButton("• ᴜᴘᴅᴀᴛᴇs ᴄʜᴀɴɴᴇʟ •", url="https://t.me/FlyTonTV")],
         [InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="close_msg")]
     ]
-    s_msg = await update.message.reply_text(default_text, reply_markup=InlineKeyboardMarkup(buttons))
+    s_msg = await update.message.reply_text(default_text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="HTML")
     context.job_queue.run_once(delete_job, 30, data={"chat_id": chat_id, "msg_ids": [s_msg.message_id, update.message.message_id]})
 
-# --- INLINE BUTTON CALLBACK HANDLER ---
+# --- BUTTON HANDLER ---
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -242,12 +231,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
 
-# --- ADMIN COMMANDS (NEXT-LEVEL SIDE-BRACKET BOX STYLE) ---
+# --- ALL ADMIN COMMANDS: CONSISTENT BOX & SMALL CAPS ---
 async def addch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
         return
+    keyboard = [[InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="close_msg")]]
     if not context.args:
-        await update.message.reply_text("╭─ ᴇʀʀᴏʀ\n╰ ᴜsᴀɢᴇ: /addch -100xxxxxxxxxx")
+        text = "╭─ ᴇʀʀᴏʀ\n╰ ᴜsᴀɢᴇ: /addch -100xxxxxxxxxx"
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
         return
     try:
         ch_id = int(context.args[0])
@@ -277,25 +268,28 @@ async def addch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "│\n"
             "╰─ ɴᴏᴛᴇ: ᴘᴇʀᴍᴀɴᴇɴᴛ ʟɪɴᴋ ɪs ғᴜʟʟʏ ʜɪᴅᴅᴇɴ"
         )
-        keyboard = [
+        action_keyboard = [
             [InlineKeyboardButton("ᴛᴇsᴛ ʀᴇǫᴜᴇsᴛ ʟɪɴᴋ", url=req_url)],
             [InlineKeyboardButton("ᴛᴇsᴛ ᴊᴏɪɴ ʟɪɴᴋ", url=join_url)],
             [InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="close_msg")]
         ]
-        await update.message.reply_text(response_text, reply_markup=InlineKeyboardMarkup(keyboard))
+        await update.message.reply_text(response_text, reply_markup=InlineKeyboardMarkup(action_keyboard))
     except Exception as e:
-        await update.message.reply_text(f"╭─ ᴇʀʀᴏʀ\n╰ {e}\nᴍᴀᴋᴇ sᴜʀᴇ ʙᴏᴛ ɪs ᴀᴅᴍɪɴ ɪɴ ᴄʜᴀɴɴᴇʟ!")
+        err_text = f"╭─ ᴇʀʀᴏʀ\n├ {e}\n╰ ᴍᴀᴋᴇ sᴜʀᴇ ʙᴏᴛ ɪs ᴀᴅᴍɪɴ ɪɴ ᴄʜᴀɴɴᴇʟ!"
+        await update.message.reply_text(err_text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def delch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
         return
+    keyboard = [[InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="close_msg")]]
     if not context.args:
+        text = "╭─ ᴇʀʀᴏʀ\n╰ ᴜsᴀɢᴇ: /delch -100xxxxxxxxxx"
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
         return
     ch_id = int(context.args[0])
     with get_db() as conn:
         conn.execute("DELETE FROM channels WHERE channel_id = ?", (ch_id,))
         conn.commit()
-    keyboard = [[InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="close_msg")]]
     text = (
         "╭─ ᴄʜᴀɴɴᴇʟ ʀᴇᴍᴏᴠᴇᴅ\n"
         f"╰ ᴛᴀʀɢᴇᴛ: {ch_id} ᴜɴʟɪɴᴋᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ"
@@ -335,25 +329,29 @@ async def setpic(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = "╭─ ʙʀᴀɴᴅɪɴɢ ᴀssᴇᴛ\n╰ ᴄᴜsᴛᴏᴍ ʜᴇᴀᴅᴇʀ ɪᴍᴀɢᴇ sᴀᴠᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ!"
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
     else:
-        await update.message.reply_text("╭─ ʙʀᴀɴᴅɪɴɢ ᴀssᴇᴛ\n╰ ʀᴇᴘʟʏ ᴛᴏ ᴀɴʏ ɪᴍᴀɢᴇ ᴡɪᴛʜ /setpic", reply_markup=InlineKeyboardMarkup(keyboard))
+        text = "╭─ ʙʀᴀɴᴅɪɴɢ ᴀssᴇᴛ\n╰ ʀᴇᴘʟʏ ᴛᴏ ᴀɴʏ ɪᴍᴀɢᴇ ᴡɪᴛʜ /setpic"
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def unsetpic(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
         return
     set_setting("custom_image", "")
     keyboard = [[InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="close_msg")]]
-    await update.message.reply_text("╭─ ʙʀᴀɴᴅɪɴɢ ᴀssᴇᴛ\n╰ ᴄᴜsᴛᴏᴍ ɪᴍᴀɢᴇ ʀᴇᴍᴏᴠᴇᴅ.", reply_markup=InlineKeyboardMarkup(keyboard))
+    text = "╭─ ʙʀᴀɴᴅɪɴɢ ᴀssᴇᴛ\n╰ ᴄᴜsᴛᴏᴍ ɪᴍᴀɢᴇ ʀᴇᴍᴏᴠᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ."
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def approveon(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
         return
+    keyboard = [[InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="close_msg")]]
     if not context.args:
+        text = "╭─ ᴇʀʀᴏʀ\n╰ ᴜsᴀɢᴇ: /approveon -100xxxxxxxxxx"
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
         return
     ch_id = int(context.args[0])
     with get_db() as conn:
         conn.execute("UPDATE channels SET auto_approve = 1 WHERE channel_id = ?", (ch_id,))
         conn.commit()
-    keyboard = [[InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="close_msg")]]
     text = (
         "╭─ ᴀᴜᴛᴏ-ᴀᴘᴘʀᴏᴠᴀʟ ᴜᴘᴅᴀᴛᴇ\n"
         "├ sᴛᴀᴛᴜs: ᴇɴᴀʙʟᴇᴅ\n"
@@ -364,13 +362,15 @@ async def approveon(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def approveoff(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
         return
+    keyboard = [[InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="close_msg")]]
     if not context.args:
+        text = "╭─ ᴇʀʀᴏʀ\n╰ ᴜsᴀɢᴇ: /approveoff -100xxxxxxxxxx"
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
         return
     ch_id = int(context.args[0])
     with get_db() as conn:
         conn.execute("UPDATE channels SET auto_approve = 0 WHERE channel_id = ?", (ch_id,))
         conn.commit()
-    keyboard = [[InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="close_msg")]]
     text = (
         "╭─ ᴀᴜᴛᴏ-ᴀᴘᴘʀᴏᴠᴀʟ ᴜᴘᴅᴀᴛᴇ\n"
         "├ sᴛᴀᴛᴜs: ᴅɪsᴀʙʟᴇᴅ\n"
@@ -394,11 +394,13 @@ async def reqmode(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def reqtime(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
         return
+    keyboard = [[InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="close_msg")]]
     if not context.args:
+        text = "╭─ ᴇʀʀᴏʀ\n╰ ᴜsᴀɢᴇ: /reqtime <seconds>"
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
         return
     sec = int(context.args[0])
     set_setting("reqtime", str(sec))
-    keyboard = [[InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="close_msg")]]
     text = (
         "╭─ ᴛɪᴍᴇʀ ᴄᴏɴғɪɢᴜʀᴀᴛɪᴏɴ\n"
         f"╰ ᴀᴘᴘʀᴏᴠᴀʟ ʙᴜғғᴇʀ sᴇᴛ ᴛᴏ: {sec}s"
@@ -456,7 +458,6 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
-# --- MAIN APP RUNNER ---
 if __name__ == "__main__":
     threading.Thread(target=run_web_server, daemon=True).start()
 
