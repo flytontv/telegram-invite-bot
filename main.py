@@ -10,6 +10,7 @@ from telegram.error import RetryAfter, TelegramError
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
+    CallbackQueryHandler,
     ChatJoinRequestHandler,
     ContextTypes,
 )
@@ -109,7 +110,7 @@ async def create_secure_invite(bot, chat_id, is_req, expire_ts, max_retries=3):
             break
     return None
 
-# --- USER START ---
+# --- USER START (CLEAN & NO-BOX STYLE) ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user or update.effective_chat.type != "private":
         return
@@ -123,7 +124,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         pass
 
-    # Link Generation (/start req_xxx ya /start join_xxx)
+    # Post Link Deep-Routing (/start req_xxx / /start join_xxx)
     if context.args and len(context.args) > 0:
         arg = context.args[0]
         is_req = arg.startswith("req_")
@@ -136,21 +137,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             invite = await create_secure_invite(context.bot, target_ch, is_req, expire_ts)
             if not invite:
-                err = await update.message.reply_text("SERVER BUSY. PLEASE CLICK THE LINK AGAIN.")
+                err = await update.message.reply_text("sᴇʀᴠᴇʀ ʙᴜsʏ. ᴘʟᴇᴀsᴇ ᴄʟɪᴄᴋ ᴛʜᴇ ʟɪɴᴋ ᴀɢᴀɪɴ.")
                 context.job_queue.run_once(delete_job, 10, data={"chat_id": chat_id, "msg_ids": [err.message_id]})
                 return
 
-            btn_label = "REQUEST TO JOIN CHANNEL" if is_req else "JOIN CHANNEL NOW"
-            keyboard = [[InlineKeyboardButton(f"• {btn_label} •", url=invite.invite_link)]]
+            btn_label = "• ʀᴇǫᴜᴇsᴛ ᴛᴏ ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ •" if is_req else "• ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ ɴᴏᴡ •"
+            keyboard = [
+                [InlineKeyboardButton(btn_label, url=invite.invite_link)],
+                [InlineKeyboardButton("ᴄʟᴏsᴇ ɴᴏᴡ", callback_data="close_msg")]
+            ]
             reply_markup = InlineKeyboardMarkup(keyboard)
 
             caption_text = (
-                "YOUR SECURE ACCESS LINK IS READY!\n\n"
-                "HOW TO JOIN:\n"
-                "1. CLICK THE BUTTON BELOW\n"
-                "2. SEND JOIN REQUEST\n"
-                "3. GET INSTANT ACCESS TO THE CHANNEL!\n\n"
-                "NOTE: THIS LINK EXPIRES AUTOMATICALLY IN 59 SECONDS."
+                "ʏᴏᴜʀ sᴇᴄᴜʀᴇ ᴀᴄᴄᴇss ʟɪɴᴋ ɪs ʀᴇᴀᴅʏ!\n\n"
+                "ʜᴏᴡ ᴛᴏ ᴊᴏɪɴ:\n"
+                "1. ᴄʟɪᴄᴋ ᴛʜᴇ ʙᴜᴛᴛᴏɴ ʙᴇʟᴏᴡ\n"
+                "2. sᴇɴᴅ ᴊᴏɪɴ ʀᴇǫᴜᴇsᴛ\n"
+                "3. ɢᴇᴛ ɪɴsᴛᴀɴᴛ ᴀᴄᴄᴇss ᴛᴏ ᴛʜᴇ ᴄʜᴀɴɴᴇʟ!\n\n"
+                "ɴᴏᴛᴇ: ᴛʜɪs ʟɪɴᴋ ᴇxᴘɪʀᴇs ᴀᴜᴛᴏᴍᴀᴛɪᴄᴀʟʟʏ ɪɴ 59 sᴇᴄᴏɴᴅs."
             )
 
             custom_img = get_setting("custom_image", "")
@@ -177,28 +181,73 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 sent_ids.append(m.message_id)
 
-            # Auto-delete in 59 seconds
+            # Auto-delete message in 59 seconds
             context.job_queue.run_once(delete_job, 59, data={"chat_id": chat_id, "msg_ids": sent_ids})
             return
 
-    # Default Start Message (Screen-shot Style)
+    # Normal direct /start message
     default_text = (
-        "I AM A SECURE LINK CHANGER BOT. YOU CAN USE ME TO GET ACCESS TO CHANNELS SAFELY!\n\n"
-        "IT'S EASY TO USE ME:\n"
-        "1. CLICK ON ANY POST LINK\n"
-        "2. GET YOUR 59-SECOND SECURE LINK\n"
-        "3. PROCEED TO JOIN THE CHANNEL EASILY!"
+        "ɪ ᴀᴍ ᴀ sᴇᴄᴜʀᴇ ʟɪɴᴋ ᴄʜᴀɴɢᴇʀ ʙᴏᴛ. ʏᴏᴜ ᴄᴀɴ ᴜsᴇ ᴍᴇ ᴛᴏ ɢᴇᴛ ᴀᴄᴄᴇss ᴛᴏ ᴄʜᴀɴɴᴇʟs sᴀғᴇʟʏ!\n\n"
+        "ɪᴛ's ᴇᴀsʏ ᴛᴏ ᴜsᴇ ᴍᴇ:\n"
+        "1. ᴄʟɪᴄᴋ ᴏɴ ᴀɴʏ ᴘᴏsᴛ ʟɪɴᴋ\n"
+        "2. ɢᴇᴛ ʏᴏᴜʀ 59-sᴇᴄᴏɴᴅ sᴇᴄᴜʀᴇ ʟɪɴᴋ\n"
+        "3. ᴘʀᴏᴄᴇᴇᴅ ᴛᴏ ᴊᴏɪɴ ᴛʜᴇ ᴄʜᴀɴɴᴇʟ ᴇᴀsɪʟʏ!"
     )
-    btn = [[InlineKeyboardButton("FlyTon Anime Channel", url="https://t.me/FlyTonTV")]]
-    s_msg = await update.message.reply_text(default_text, reply_markup=InlineKeyboardMarkup(btn))
+    buttons = [
+        [InlineKeyboardButton("ᴜᴘᴅᴀᴛᴇs ᴄʜᴀɴɴᴇʟ", url="https://t.me/FlyTonTV")],
+        [InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="close_msg")]
+    ]
+    s_msg = await update.message.reply_text(default_text, reply_markup=InlineKeyboardMarkup(buttons))
     context.job_queue.run_once(delete_job, 30, data={"chat_id": chat_id, "msg_ids": [s_msg.message_id, update.message.message_id]})
 
-# --- ADMIN COMMANDS ---
+# --- INLINE BUTTON CALLBACK HANDLER ---
+async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "close_msg":
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
+    elif query.data == "refresh_status":
+        if not is_admin(query.from_user.id):
+            return
+        with get_db() as conn:
+            c = conn.cursor()
+            c.execute("SELECT COUNT(*) FROM channels")
+            ch_count = c.fetchone()[0]
+            c.execute("SELECT COUNT(*) FROM users")
+            u_count = c.fetchone()[0]
+
+        img = "sᴇᴛ" if get_setting("custom_image") else "ɴᴏᴛ sᴇᴛ"
+        text = (
+            "╭─ sʏsᴛᴇᴍ sᴛᴀᴛᴜs ᴏᴠᴇʀᴠɪᴇᴡ\n"
+            "│\n"
+            "├ ⚡ ᴄᴏʀᴇ ᴇɴɢɪɴᴇ: ᴏɴʟɪɴᴇ (ᴄᴏɴᴄᴜʀʀᴇɴᴛ)\n"
+            f"├ 📢 ᴄᴏɴɴᴇᴄᴛᴇᴅ ᴄʜᴀɴɴᴇʟs: {ch_count}\n"
+            f"├ 👥 ᴛᴏᴛᴀʟ ᴜsᴇʀs: {u_count}\n"
+            f"├ 🖼 ᴄᴜsᴛᴏᴍ ʙʀᴀɴᴅɪɴɢ: {img}\n"
+            f"├ ⚙️ ᴀᴜᴛᴏ-ᴀᴘᴘʀᴏᴠᴀʟ: {get_setting('reqmode', 'on').upper()}\n"
+            f"├ ⏱️ ᴀᴘᴘʀᴏᴠᴀʟ ᴅᴇʟᴀʏ: {get_setting('reqtime', '0')}s\n"
+            "│\n"
+            "╰─ ᴅᴀᴛᴀʙᴀsᴇ: ᴡᴀʟ-ᴍᴏᴅᴇ ᴀᴄᴛɪᴠᴇ"
+        )
+        keyboard = [
+            [InlineKeyboardButton("ʀᴇғʀᴇsʜ sᴛᴀᴛs", callback_data="refresh_status")],
+            [InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="close_msg")]
+        ]
+        try:
+            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+        except Exception:
+            pass
+
+# --- ADMIN COMMANDS (NEXT-LEVEL SIDE-BRACKET BOX STYLE) ---
 async def addch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
         return
     if not context.args:
-        await update.message.reply_text("USAGE: /addch -100xxxxxxxxxx")
+        await update.message.reply_text("╭─ ᴇʀʀᴏʀ\n╰ ᴜsᴀɢᴇ: /addch -100xxxxxxxxxx")
         return
     try:
         ch_id = int(context.args[0])
@@ -214,20 +263,28 @@ async def addch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         join_url = f"https://t.me/{bot_user}?start=join_{clean_id}"
 
         response_text = (
-            f"CHANNEL ADDED SUCCESSFULLY!\n\n"
-            f"CHANNEL: {chat.title}\n"
-            f"CHANNEL ID: {ch_id}\n\n"
-            f"INFINITE POST LINKS:\n\n"
-            f"1. REQUEST TO JOIN LINK:\n{req_url}\n\n"
-            f"2. DIRECT JOIN LINK:\n{join_url}"
+            "╭─ ᴄʜᴀɴɴᴇʟ ᴀᴅᴅᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ\n"
+            "│\n"
+            f"├ 📢 ᴄʜᴀɴɴᴇʟ: {chat.title}\n"
+            f"├ 🆔 ᴄʜᴀɴɴᴇʟ ɪᴅ: {ch_id}\n"
+            "│\n"
+            "├ 🔗 ɪɴғɪɴɪᴛᴇ ᴘᴏsᴛ ʟɪɴᴋs:\n"
+            "├ 1. ʀᴇǫᴜᴇsᴛ ʟɪɴᴋ:\n"
+            f"│  {req_url}\n"
+            "│\n"
+            "├ 2. ᴅɪʀᴇᴄᴛ ᴊᴏɪɴ ʟɪɴᴋ:\n"
+            f"│  {join_url}\n"
+            "│\n"
+            "╰─ ɴᴏᴛᴇ: ᴘᴇʀᴍᴀɴᴇɴᴛ ʟɪɴᴋ ɪs ғᴜʟʟʏ ʜɪᴅᴅᴇɴ"
         )
         keyboard = [
-            [InlineKeyboardButton("TEST REQUEST LINK", url=req_url)],
-            [InlineKeyboardButton("TEST JOIN LINK", url=join_url)]
+            [InlineKeyboardButton("ᴛᴇsᴛ ʀᴇǫᴜᴇsᴛ ʟɪɴᴋ", url=req_url)],
+            [InlineKeyboardButton("ᴛᴇsᴛ ᴊᴏɪɴ ʟɪɴᴋ", url=join_url)],
+            [InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="close_msg")]
         ]
         await update.message.reply_text(response_text, reply_markup=InlineKeyboardMarkup(keyboard))
     except Exception as e:
-        await update.message.reply_text(f"ERROR: {e}\nMAKE SURE BOT IS ADMIN IN THE CHANNEL!")
+        await update.message.reply_text(f"╭─ ᴇʀʀᴏʀ\n╰ {e}\nᴍᴀᴋᴇ sᴜʀᴇ ʙᴏᴛ ɪs ᴀᴅᴍɪɴ ɪɴ ᴄʜᴀɴɴᴇʟ!")
 
 async def delch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
@@ -238,7 +295,12 @@ async def delch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     with get_db() as conn:
         conn.execute("DELETE FROM channels WHERE channel_id = ?", (ch_id,))
         conn.commit()
-    await update.message.reply_text(f"CHANNEL {ch_id} REMOVED SUCCESSFULLY!")
+    keyboard = [[InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="close_msg")]]
+    text = (
+        "╭─ ᴄʜᴀɴɴᴇʟ ʀᴇᴍᴏᴠᴇᴅ\n"
+        f"╰ ᴛᴀʀɢᴇᴛ: {ch_id} ᴜɴʟɪɴᴋᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ"
+    )
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def channels_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
@@ -248,33 +310,39 @@ async def channels_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         c.execute("SELECT channel_id, title FROM channels")
         rows = c.fetchall()
     if not rows:
-        await update.message.reply_text("NO CONNECTED CHANNELS FOUND.")
+        keyboard = [[InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="close_msg")]]
+        await update.message.reply_text("╭─ ᴀʟʟ ᴄᴏɴɴᴇᴄᴛᴇᴅ ᴄʜᴀɴɴᴇʟs\n╰ ɴᴏ ᴄᴏɴɴᴇᴄᴛᴇᴅ ᴄʜᴀɴɴᴇʟs ғᴏᴜɴᴅ.", reply_markup=InlineKeyboardMarkup(keyboard))
         return
     bot_user = (await context.bot.get_me()).username
-    msg = "ALL CONNECTED CHANNELS:\n\n"
+    msg = "╭─ ᴀʟʟ ᴄᴏɴɴᴇᴄᴛᴇᴅ ᴄʜᴀɴɴᴇʟs\n│\n"
     buttons = []
     for r in rows:
         clean_id = str(r[0]).replace("-100", "")
         link = f"https://t.me/{bot_user}?start=req_{clean_id}"
-        msg += f"• {r[1]} ({r[0]})\n{link}\n\n"
-        buttons.append([InlineKeyboardButton(f"OPEN {r[1]}", url=link)])
+        msg += f"├ • {r[1]} ({r[0]})\n│   {link}\n"
+        buttons.append([InlineKeyboardButton(f"ᴏᴘᴇɴ {r[1]}", url=link)])
+    msg += f"│\n╰─ ᴛᴏᴛᴀʟ ᴀᴄᴛɪᴠᴇ ɴᴏᴅᴇs: {len(rows)}"
+    buttons.append([InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="close_msg")])
     await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(buttons))
 
 async def setpic(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
         return
+    keyboard = [[InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="close_msg")]]
     if update.message.reply_to_message and update.message.reply_to_message.photo:
         fid = update.message.reply_to_message.photo[-1].file_id
         set_setting("custom_image", fid)
-        await update.message.reply_text("CUSTOM HEADER IMAGE HAS BEEN UPDATED!")
+        text = "╭─ ʙʀᴀɴᴅɪɴɢ ᴀssᴇᴛ\n╰ ᴄᴜsᴛᴏᴍ ʜᴇᴀᴅᴇʀ ɪᴍᴀɢᴇ sᴀᴠᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ!"
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
     else:
-        await update.message.reply_text("REPLY TO ANY IMAGE WITH /setpic")
+        await update.message.reply_text("╭─ ʙʀᴀɴᴅɪɴɢ ᴀssᴇᴛ\n╰ ʀᴇᴘʟʏ ᴛᴏ ᴀɴʏ ɪᴍᴀɢᴇ ᴡɪᴛʜ /setpic", reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def unsetpic(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
         return
     set_setting("custom_image", "")
-    await update.message.reply_text("CUSTOM IMAGE REMOVED.")
+    keyboard = [[InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="close_msg")]]
+    await update.message.reply_text("╭─ ʙʀᴀɴᴅɪɴɢ ᴀssᴇᴛ\n╰ ᴄᴜsᴛᴏᴍ ɪᴍᴀɢᴇ ʀᴇᴍᴏᴠᴇᴅ.", reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def approveon(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
@@ -285,7 +353,13 @@ async def approveon(update: Update, context: ContextTypes.DEFAULT_TYPE):
     with get_db() as conn:
         conn.execute("UPDATE channels SET auto_approve = 1 WHERE channel_id = ?", (ch_id,))
         conn.commit()
-    await update.message.reply_text(f"AUTO-APPROVAL ENABLED FOR {ch_id}")
+    keyboard = [[InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="close_msg")]]
+    text = (
+        "╭─ ᴀᴜᴛᴏ-ᴀᴘᴘʀᴏᴠᴀʟ ᴜᴘᴅᴀᴛᴇ\n"
+        "├ sᴛᴀᴛᴜs: ᴇɴᴀʙʟᴇᴅ\n"
+        f"╰ ᴛᴀʀɢᴇᴛ: {ch_id}"
+    )
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def approveoff(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
@@ -296,7 +370,13 @@ async def approveoff(update: Update, context: ContextTypes.DEFAULT_TYPE):
     with get_db() as conn:
         conn.execute("UPDATE channels SET auto_approve = 0 WHERE channel_id = ?", (ch_id,))
         conn.commit()
-    await update.message.reply_text(f"AUTO-APPROVAL DISABLED FOR {ch_id}")
+    keyboard = [[InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="close_msg")]]
+    text = (
+        "╭─ ᴀᴜᴛᴏ-ᴀᴘᴘʀᴏᴠᴀʟ ᴜᴘᴅᴀᴛᴇ\n"
+        "├ sᴛᴀᴛᴜs: ᴅɪsᴀʙʟᴇᴅ\n"
+        f"╰ ᴛᴀʀɢᴇᴛ: {ch_id}"
+    )
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def reqmode(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
@@ -304,7 +384,12 @@ async def reqmode(update: Update, context: ContextTypes.DEFAULT_TYPE):
     curr = get_setting("reqmode", "on")
     nxt = "off" if curr == "on" else "on"
     set_setting("reqmode", nxt)
-    await update.message.reply_text(f"GLOBAL AUTO-APPROVAL IS NOW: {nxt.upper()}")
+    keyboard = [[InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="close_msg")]]
+    text = (
+        "╭─ ɢʟᴏʙᴀʟ ᴘɪᴘᴇʟɪɴᴇ ᴍᴏᴅᴇ\n"
+        f"╰ ᴀᴜᴛᴏ-ᴀᴘᴘʀᴏᴠᴀʟ ɪs ɴᴏᴡ: {nxt.upper()}"
+    )
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def reqtime(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
@@ -313,7 +398,12 @@ async def reqtime(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     sec = int(context.args[0])
     set_setting("reqtime", str(sec))
-    await update.message.reply_text(f"AUTO-APPROVAL TIMER SET TO: {sec} SECONDS")
+    keyboard = [[InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="close_msg")]]
+    text = (
+        "╭─ ᴛɪᴍᴇʀ ᴄᴏɴғɪɢᴜʀᴀᴛɪᴏɴ\n"
+        f"╰ ᴀᴘᴘʀᴏᴠᴀʟ ʙᴜғғᴇʀ sᴇᴛ ᴛᴏ: {sec}s"
+    )
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     req = update.chat_join_request
@@ -347,17 +437,26 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         c.execute("SELECT COUNT(*) FROM users")
         u_count = c.fetchone()[0]
 
-    img = "SET" if get_setting("custom_image") else "NOT SET"
+    img = "sᴇᴛ" if get_setting("custom_image") else "ɴᴏᴛ sᴇᴛ"
     text = (
-        "SYSTEM STATUS OVERVIEW:\n\n"
-        f"CONNECTED CHANNELS: {ch_count}\n"
-        f"TOTAL USERS: {u_count}\n"
-        f"CUSTOM BRANDING: {img}\n"
-        f"AUTO-APPROVAL MODE: {get_setting('reqmode', 'on').upper()}\n"
-        f"APPROVAL DELAY: {get_setting('reqtime', '0')} SECONDS"
+        "╭─ sʏsᴛᴇᴍ sᴛᴀᴛᴜs ᴏᴠᴇʀᴠɪᴇᴡ\n"
+        "│\n"
+        "├ ⚡ ᴄᴏʀᴇ ᴇɴɢɪɴᴇ: ᴏɴʟɪɴᴇ (ᴄᴏɴᴄᴜʀʀᴇɴᴛ)\n"
+        f"├ 📢 ᴄᴏɴɴᴇᴄᴛᴇᴅ ᴄʜᴀɴɴᴇʟs: {ch_count}\n"
+        f"├ 👥 ᴛᴏᴛᴀʟ ᴜsᴇʀs: {u_count}\n"
+        f"├ 🖼 ᴄᴜsᴛᴏᴍ ʙʀᴀɴᴅɪɴɢ: {img}\n"
+        f"├ ⚙️ ᴀᴜᴛᴏ-ᴀᴘᴘʀᴏᴠᴀʟ: {get_setting('reqmode', 'on').upper()}\n"
+        f"├ ⏱️ ᴀᴘᴘʀᴏᴠᴀʟ ᴅᴇʟᴀʏ: {get_setting('reqtime', '0')}s\n"
+        "│\n"
+        "╰─ ᴅᴀᴛᴀʙᴀsᴇ: ᴡᴀʟ-ᴍᴏᴅᴇ ᴀᴄᴛɪᴠᴇ"
     )
-    await update.message.reply_text(text)
+    keyboard = [
+        [InlineKeyboardButton("ʀᴇғʀᴇsʜ sᴛᴀᴛs", callback_data="refresh_status")],
+        [InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="close_msg")]
+    ]
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
+# --- MAIN APP RUNNER ---
 if __name__ == "__main__":
     threading.Thread(target=run_web_server, daemon=True).start()
 
@@ -379,6 +478,7 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("reqmode", reqmode))
     app.add_handler(CommandHandler("reqtime", reqtime))
     app.add_handler(CommandHandler("status", status))
+    app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_handler(ChatJoinRequestHandler(handle_join_request))
 
     app.run_polling(drop_pending_updates=True)
